@@ -47,7 +47,8 @@ size_check*.png
 # OS
 .DS_Store
 Thumbs.db
-paper/
+paper/*
+!paper/main.pdf
 arxiv_submission.tar.gz
 assets/*.log
 assets/*.aux
