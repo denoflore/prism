@@ -1,7 +1,7 @@
 <h1 align="center">PRISM</h1>
 
 <p align="center">
-  <b>PRISM replaces O(N) KV cache scanning with O(1) photonic block selection.</b>
+  <b>Photonic block selection for KV cache: O(N) scan to O(1)</b>
 </p>
 
 <p align="center">
@@ -12,30 +12,28 @@
 </p>
 
 <p align="center">
-  <img src="assets/hero_v3.png?v=4" width="700"/>
+  <img src="assets/hero_v3.png?v=5" width="700"/>
 </p>
 
 ---
 
-## Why PRISM?
+## Overview
 
-Long-context LLM inference is **memory-bound, not compute-bound**. Every decode step reads the entire KV cache from HBM — a wall that no amount of arithmetic scaling can break.
+Long-context LLM decode is memory-bound. Block-selection methods (Quest, RocketKV, InfLLM) reduce the KV blocks fetched per step, but the selection itself still reads all N block signatures from HBM at O(N) cost.
 
-Existing block-selection methods (Quest, RocketKV, InfLLM) reduce the blocks *fetched*, but **still scan all N candidates** at O(N) cost. The scan itself becomes the bottleneck at long contexts.
+PRISM offloads the selection to a photonic co-processor. The query is encoded onto WDM wavelengths, passively split to N MRR weight-bank channels, and all N similarity scores are computed in a single optical pass. Only the top-k block indices are returned to the GPU. The scan is eliminated; HBM traffic drops from O(N) to O(k).
 
-**PRISM eliminates the scan entirely.** Read only top-k blocks → **O(1) selection + O(k) memory access**.
+No chip has been fabricated. All photonic numbers below are device-physics simulations on TFLN. GPU scan timings are measured on H100.
 
-| | GPU–HBM Full Scan | GPU Block Selection | Dedicated ASIC | **PRISM** |
+| | GPU Full Scan | GPU Block Selection | ASIC | PRISM |
 |---|:---:|:---:|:---:|:---:|
-| Scan eliminated? | N/A (reads all) | No | Partially (parallelized) | **Yes** (broadcast) |
+| Scan eliminated? | N/A (reads all) | No | Partially | Yes (broadcast) |
 | Signature storage | None | GPU HBM | Local SRAM | MRR weight bank |
-| Selection method | None (read all) | Read N sigs from HBM, sequential inner product | N-way parallel compute | Optical broadcast + MRR inner product |
-| HBM read (selection) | 0 | N×d×2 bytes | 0 (local SRAM) | **0** (stored in MRR) |
-| Selection latency | 0 | ~1-5 us (HBM-bound) | ~10-100 ns (SRAM) | **~9 ns** (optical O(1)) |
-| Selection energy | 0 | ~4-16 uJ (HBM energy) | ~10-100 nJ (SRAM+MAC) | **~2.3 nJ** (laser+ADC) |
-| Scaling with N | O(N) HBM read | O(N) HBM read | O(N) area, power, routing | **O(1)** passive split |
-| Static power | 0 | 0 | ~W (SRAM leakage) | **~0** (Pockels EO) |
-| Extra hardware | None | None | Dedicated chip | Photonic chip |
+| HBM read (selection) | 0 | N×d×2 bytes | 0 (local SRAM) | 0 (stored in MRR) |
+| Selection latency | 0 | ~1-5 us | ~10-100 ns | ~9 ns (simulated) |
+| Selection energy | 0 | ~4-16 uJ | ~10-100 nJ | ~2.3 nJ (simulated) |
+| Scaling with N | O(N) | O(N) | O(N) area | O(1) passive split |
+| Static power | 0 | 0 | ~W (SRAM) | ~0 (Pockels EO) |
 
 ## Quick Start
 
@@ -43,35 +41,33 @@ Existing block-selection methods (Quest, RocketKV, InfLLM) reduce the blocks *fe
 git clone https://github.com/hyoseokp/PRISM.git
 cd PRISM
 pip install -e .
-
-# Run demo — instant results, no GPU required
 python demo.py
 ```
 
-Output (1M context):
+Output (1M context, single query):
 ```
 PRISM vs H100 Comparison Report (N=8192, d=32, k=32)
-  Signature scan:   8.5 us (GPU) → ELIMINATED (PRISM)
-  Selection:        8.5 us → 9 ns  (944x faster)
-  Energy:           42 uJ → 2.3 nJ (18,000x less)
-  HBM traffic:      512 KB scan + 2 MB fetch → 2 MB only (20% saved)
+  Signature scan:   8.5 us (GPU, measured) → ELIMINATED (PRISM)
+  Selection:        8.5 us (measured) → 9 ns (simulated)  (944x)
+  Energy:           42 uJ (estimated) → 2.3 nJ (simulated) (18,000x)
+  HBM traffic:      512 KB scan + 2 MB fetch → 2 MB only
 ```
 
 ## Results
 
-Tested on **Qwen2.5-7B**, block size B=128, signature dimension d=32.
+Tested on Qwen2.5-7B, block size B=128, signature dimension d=32.
 
 | Metric | Value | Conditions |
 |--------|-------|------------|
-| Needle-block hit-rate | **100%** | 4K–64K tokens, k=32 |
-| KV traffic reduction | **32x** | 128K context, k=32, B=128 |
-| Retrieval heads | **>90%** | Qwen2.5-7B, tau=0.3 |
-| Proxy recall@32 | **100%** | 8K context, mean-key, d=32 |
-| Signed weight improvement | **+87%** | vs ReLU encoding |
-| Dynamic selection energy | **2,290 pJ** | per query, optical core only |
-| LongBench-v2 (3 domains) | **0% drop** | vs full attention, 4K |
+| Needle-block hit-rate | 100% | 4K-64K tokens, k=32 |
+| KV traffic reduction | 32x | 128K context, k=32, B=128 |
+| Retrieval heads | >90% | Qwen2.5-7B, tau=0.3 |
+| Proxy recall@32 | 100% | 8K context, mean-key, d=32 |
+| Signed weight improvement | +87% | vs ReLU encoding |
+| Dynamic selection energy | 2,290 pJ | per query, simulated, optical core only |
+| LongBench-v2 (3 domains) | 0% drop | vs full attention, 4K |
 
-> All GPU values estimated from H100 datasheet. PRISM values from device-physics simulation — no fabricated chip. Dynamic energy excludes TEC (~1W), amortized by query rate. See paper for full details.
+GPU scan timings measured on H100. PRISM energy/latency from device-physics simulation (no fabricated chip). Dynamic energy excludes TEC (~1W), amortized by query rate. Details in paper.
 
 ## How It Works
 
@@ -85,11 +81,11 @@ Every decode step:    Query → light → broadcast → N inner products → top
   <img src="assets/fig_system_architecture_tikz.png" width="525"/>
 </p>
 
-**The physics does the math**: MRR transmission = multiplication, broadband photodetection = summation. No electronic MAC needed.
+MRR transmission implements multiplication; broadband photodetection implements summation. No electronic MAC needed.
 
-## GPU-Only Block Selection (no photonic chip needed)
+## GPU-Only Block Selection
 
-PRISM's block selection algorithm also works as a **pure GPU memory optimizer** — no photonic hardware required. Similar to Quest/RocketKV but with mean-key signatures and random projection.
+The block selection algorithm runs on GPU without photonic hardware. Similar to Quest/RocketKV but with mean-key signatures and random projection. The GPU-only selector still performs an O(N) signature scan from HBM; the O(1) claim applies only to the photonic co-processor.
 
 ```python
 from prism.block_selector import BlockSelector
@@ -97,122 +93,94 @@ from prism.block_selector import BlockSelector
 selector = BlockSelector(block_size=128, k=32, d_sig=32, window=256)
 selector.build_signatures(kv_keys)           # [n_tokens, d_head]
 output = selector.block_sparse_attention(query, kv_keys, kv_values)
-
-print(selector.stats)
-# {'traffic_reduction': '30.1x', 'memory_saved': '97%', ...}
 ```
 
-> **On GPU**: saves memory by reading only k blocks (same as Quest/RocketKV).
-> **With PRISM photonic chip**: the selection itself becomes O(1) instead of O(N).
+On GPU, this saves memory by reading only k blocks (same benefit as Quest/RocketKV). The selection scan itself remains O(N). A photonic chip replaces this O(N) scan with O(1) optical evaluation.
 
-### How much does the scan cost? (measured on GPU)
+### GPU scan cost (measured)
 
 ```bash
 python benchmarks/compare_selection_methods.py
 ```
 
-| Context | N blocks | GPU scan (measured) | Scan-free* | Speedup |
+| Context | N blocks | GPU scan (measured) | Photonic (simulated) | Speedup |
 |--------:|--------:|-------------------:|----------:|--------:|
 | 128K | 1,024 | 1.1 us | 9 ns | 122x |
 | 1M | 8,192 | 8.5 us | 9 ns | 944x |
 | 10M | 81,920 | 80 us | 9 ns | 8,889x |
 
-> \*Scan-free = theoretical lower bound if scan is fully eliminated (e.g., via photonic broadcast). No fabricated PRISM chip — 9 ns is a device-physics estimate. GPU scan values are real measurements.
+Photonic 9 ns is a device-physics estimate, not a measurement.
 
-## For LLM Engineers
-
-**No photonic chip needed.** The simulator runs on any GPU/CPU:
+## Simulator
 
 ```python
 from prism.simulator import PRISMSimulator
 
-# Works with ANY HuggingFace model (Qwen, Llama, Mistral, ...)
 sim = PRISMSimulator(d_sig=32, k=32, block_size=128, bits=5, drift=0.01)
 sim.register_signatures(kv_keys)      # [n_tokens, d_head]
 top_indices = sim.select(query_vec)    # → k block indices
-sim.report()                           # → stage-by-stage GPU vs PRISM comparison
+sim.report()
 ```
-
-### Profile the bottleneck on YOUR GPU
 
 ```bash
 python benchmarks/profile_kv_scan.py --n_blocks 1024 --d 32
-```
-
-### Run NIAH benchmark
-
-```bash
 python benchmarks/run_niah.py --quick    # ~2 min, 16GB VRAM
 python benchmarks/run_niah.py            # full 4K-64K evaluation
 ```
 
-## For Photonic Computing Researchers
+## Photonic Hardware Parameters
 
-**KV cache block selection is a killer application for broadcast-and-weight photonic hardware.** Here's why your chip is a natural fit:
+The workload has properties that map to broadcast-and-weight photonic architectures:
 
-| Property of the workload | Why it matches B&W photonics |
+| Workload property | Photonic mapping |
 |---|---|
-| Query broadcast to all N candidates | = passive 1×N optical splitting |
-| Block signatures are quasi-static (update every 128 tokens) | = MRR weight programming via EO DC bias |
-| Only rank order matters (not exact values) | = 4-6 bit precision sufficient (relaxed DAC/ADC) |
-| Latency-critical (per-token decode) | = O(1) optical transit vs O(N) electronic scan |
-| Scales with context length | = advantage **grows** as N increases |
+| Query fans out to all N candidates | Passive 1×N optical splitting |
+| Block signatures update every 128 tokens | MRR weight programming via EO DC bias |
+| Only rank order matters | 4-6 bit precision sufficient |
+| Per-token latency-critical | O(1) optical transit vs O(N) electronic scan |
 
-**If you have a B&W photonic chip**, this repo provides:
+Device parameters used in simulation (X-cut TFLN):
 
-- **`prism/hw_sim/mrr_model.py`** — Lorentzian MRR model with Pockels EO tuning (X-cut TFLN, Q=10K, r33=30.9 pm/V). Plug in your own device parameters.
-- **`prism/simulator.py`** — Full impairment pipeline (quantization, thermal drift, detector noise). Test your chip's specs against this workload.
-- **`scripts/wdm_crosstalk.py`** — WDM channel isolation analysis for your channel spacing.
-- **`benchmarks/compare_selection_methods.py`** — Measured GPU scan cost = the latency your chip needs to beat.
+| Parameter | Value |
+|-----------|:---:|
+| MRR Q | 10,000 |
+| Weight precision | 5 bit |
+| Tuning | Pockels EO (28.5 pm/V) |
+| Static power | ~0 (capacitive) |
+| Signed weights | Balanced PD (w in [-1,+1]) |
+| WDM channels | d=32-128 |
 
-### Key device parameters (adapt to your platform)
+Hardware models: `prism/hw_sim/mrr_model.py`, `prism/simulator.py`, `scripts/wdm_crosstalk.py`.
 
-| Parameter | PRISM (TFLN) | Your chip? |
-|-----------|:---:|:---:|
-| MRR Q | 10,000 | ? |
-| Weight precision | 5 bit | ? |
-| Tuning mechanism | Pockels EO (28.5 pm/V) | ? |
-| Static power | ~0 (capacitive) | ? |
-| Signed weights | Balanced PD (w ∈ [-1,+1]) | ? |
-| WDM channels | d=32-128 | ? |
+## Batch Serving
 
-> **The question is not "can photonics do matrix multiply faster than GPU?" (probably not). The question is "where does photonic broadcast provide a structural advantage?" KV cache selection is that place.**
-
-## Batch Serving: Where PRISM Shines
-
-In batch serving, model weights are shared across users but **each user's KV signature scan competes for HBM bandwidth**. PRISM eliminates this competition entirely — signatures live in MRR weights, not HBM.
+In batch serving, model weights are amortized across users but each user's signature scan consumes HBM bandwidth. PRISM removes this per-user HBM cost entirely.
 
 ### Decode step breakdown (batch=128, 1M context, Qwen2.5-7B on H100)
 
-| Stage | GPU Full Scan | Quest | PRISM (1 chip) |
+| Stage | GPU Full Scan | GPU Block Sel. | PRISM (1 chip) |
 |-------|:---:|:---:|:---:|
-| HBM READ: model weights | 4,179 us | 4,179 us | 4,179 us |
-| HBM READ: KV scan/read | **2,189,254 us** | — | — |
-| HBM READ: signature scan | — | **8,567 us** | — |
-| Photonic selection | — | — | **1,490 us** |
-| HBM READ: KV fetch (k=32) | — | 8,567 us | 8,567 us |
-| | | | |
-| **Total HBM read** | **7,348 GB** | **71 GB** | **43 GB** |
-| **Total time** | **2,193 ms** | **21.3 ms** | **14.3 ms** |
-| **Batch throughput** | 58 tok/s | 6,009 tok/s | **8,951 tok/s** |
-| **Per-user throughput** | 0.5 tok/s | 47 tok/s | **70 tok/s** |
-| **Per-user latency** | 2,193 ms | 21.3 ms | **14.3 ms** |
+| Model weights | 4,179 us | 4,179 us | 4,179 us |
+| KV full read | 2,189,254 us | - | - |
+| Signature scan | - | 8,567 us | - |
+| Photonic selection | - | - | 1,490 us |
+| KV fetch (k=32) | - | 8,567 us | 8,567 us |
+| **Total** | **2,193 ms** | **21.3 ms** | **14.3 ms** |
 
-> GPU Full Scan at batch=128 requires 7,348 GB HBM — not feasible on a single GPU. Shown for reference only.
+GPU Full Scan at batch=128 is infeasible on a single H100 (7,348 GB total HBM reads). Included as a theoretical baseline.
 
-### PRISM scales much slower than GPU
+### Scaling with context length
 
-Quest's scan grows as O(N) — at long contexts, scan dominates the decode step.
-PRISM (N_chip=1,024) pages through blocks when N > N_chip, growing as O(N/N_chip) but with a per-page cost of only 13 ns — orders of magnitude below HBM read cost.
+GPU block selection scan grows as O(N). PRISM (N_chip=1,024) pages through blocks when N > N_chip, growing as O(N/N_chip) with a per-page cost of 13 ns.
 
-| Batch=128 | Quest (ms) | PRISM (ms) | Improvement |
+| Batch=128 | GPU Block Sel. (ms) | PRISM (ms) | Speedup |
 |-----------|:---:|:---:|:---:|
 | 128K | 13.8 | 13.0 | 1.06x |
-| 1M | 21.3 | 14.3 | **1.5x** |
-| 10M | 98.3 | 27.7 | **3.5x** |
-| 100M | 859 | 161.8 | **5.3x** |
+| 1M | 21.3 | 14.3 | 1.5x |
+| 10M | 98.3 | 27.7 | 3.5x |
+| 100M | 859 | 161.8 | 5.3x |
 
-> PRISM uses time-division multiplexing: one chip (N_chip=1,024) serves all 128 users by reprogramming MRR weights per user (~4 ns on TFLN Pockels EO) + photonic evaluation (~9 ns) = 13 ns/user/head. When context exceeds chip capacity, PRISM pages through ceil(N/N_chip) configurations. Adding parallel banks eliminates paging entirely. All GPU values from H100 datasheet; PRISM values from device-physics simulation (no fabricated chip).
+PRISM uses time-division multiplexing: one chip (N_chip=1,024) serves 128 users by reprogramming MRR weights per user (~4 ns, TFLN Pockels EO) + photonic evaluation (~9 ns) = 13 ns/user/head. When context exceeds chip capacity, PRISM pages through ceil(N/N_chip) configurations. Adding parallel banks eliminates paging. GPU timings from H100 datasheet. PRISM timings from device-physics simulation.
 
 ## Energy Crossover
 
@@ -220,7 +188,7 @@ PRISM (N_chip=1,024) pages through blocks when N > N_chip, growing as O(N/N_chip
   <img src="assets/fig_crossover_contour.png" width="400"/>
 </p>
 
-<p align="center"><b>Black line</b> = crossover. <b>Blue</b> = PRISM wins. <b>Red</b> = GPU wins. <b>★</b> = paper design points.<br>PRISM is energy-favorable at context ≥4K tokens.</p>
+<p align="center">Crossover contour: PRISM becomes energy-favorable above ~4K tokens vs GPU full scan.</p>
 
 ## Chip Design
 
@@ -230,12 +198,21 @@ PRISM (N_chip=1,024) pages through blocks when N > N_chip, growing as O(N/N_chip
 
 <p align="center">8x8 TFLN MRR weight bank. Scales to d=32, N=256 (single chip) or d=64, N=1024 (multi-chip).</p>
 
+## Limitations
+
+- No physical chip has been fabricated. All PRISM latency and energy numbers are device-physics simulations on TFLN, not measurements.
+- Dynamic energy (2,290 pJ) excludes TEC thermal stabilization (~1 W), which is amortized across queries but dominates at low query rates.
+- The single-chip capacity is N_chip=1,024 blocks (128K context). Beyond this, time-division paging is required, adding O(N/N_chip) overhead per evaluation.
+- MRR resonance wavelengths are sensitive to fabrication variation and thermal drift. Calibration via DC bias is assumed but not demonstrated.
+- NIAH evaluation covers 4K-64K tokens. Longer-context and multi-hop reasoning benchmarks have not been tested.
+- The GPU-only block selector in this repo performs O(N) scans, the same as Quest/RocketKV. The O(1) claim applies only to the photonic co-processor.
+
 ## Repository Structure
 
 ```
 PRISM/
 ├── prism/                    # Core Python package (PyTorch/CUDA)
-│   ├── simulator.py          #   Drop-in PRISM emulator for any LLM
+│   ├── simulator.py          #   PRISM emulator
 │   ├── hw_sim/               #   MRR physics, noise, energy models
 │   ├── kv_block/             #   Block partitioning & signatures
 │   ├── similarity/           #   Broadcast-and-weight engine
@@ -244,7 +221,6 @@ PRISM/
 ├── benchmarks/               # GPU profiler + NIAH benchmark
 ├── scripts/                  # Paper figure generation
 ├── results/                  # Pre-computed JSON results
-├── paper/                    # LaTeX source & PDF
 └── demo.py                   # One-command demo
 ```
 
@@ -262,12 +238,12 @@ PRISM/
 
 ## Related Work
 
-- **[Quest](https://arxiv.org/abs/2406.10774)** — Query-aware KV cache selection (Tang et al., 2024)
-- **[RocketKV](https://github.com/NVlabs/RocketKV)** — Two-stage coarse-fine KV retrieval (NVlabs, 2025)
-- **[InfLLM](https://arxiv.org/abs/2402.04617)** — CPU-offloaded KV cache with block retrieval (Xiao et al., 2024)
-- **[MRR-AEF](https://arxiv.org/abs/2603.12934)** — MRR cascade for photonic softmax (Park & Park, 2026)
-- **[KVTC](https://arxiv.org/abs/2511.01815)** — KV cache transform coding, 20x compression (NVIDIA, ICLR 2026)
+- [Quest](https://arxiv.org/abs/2406.10774) - Query-aware KV cache selection (Tang et al., 2024)
+- [RocketKV](https://github.com/NVlabs/RocketKV) - Two-stage coarse-fine KV retrieval (NVlabs, 2025)
+- [InfLLM](https://arxiv.org/abs/2402.04617) - CPU-offloaded KV cache with block retrieval (Xiao et al., 2024)
+- [MRR-AEF](https://arxiv.org/abs/2603.12934) - MRR cascade for photonic softmax (Park & Park, 2026)
+- [KVTC](https://arxiv.org/abs/2511.01815) - KV cache transform coding, 20x compression (NVIDIA, ICLR 2026)
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
