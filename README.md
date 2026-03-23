@@ -244,6 +244,10 @@ PRISM/
 - [MRR-AEF](https://arxiv.org/abs/2603.12934) - MRR cascade for photonic softmax (Park & Park, 2026)
 - [KVTC](https://arxiv.org/abs/2511.01815) - KV cache transform coding, 20x compression (NVIDIA, ICLR 2026)
 
+## Contact
+
+Hyoseok Park — qkrgytjr12@gmail.com
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
