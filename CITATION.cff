@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "PRISM: Breaking the O(n) Memory Wall in Long-Context LLM Inference via O(1) Photonic Block Selection"
+authors:
+  - family-names: Park
+    given-names: Hyoseok
+    affiliation: "Department of Physics, Chungnam National University"
+  - family-names: Park
+    given-names: Yeonsang
+    affiliation: "Department of Physics, Chungnam National University"
+    orcid: ""
+type: software
+license: MIT
+repository-code: "https://github.com/hyoseokp/PRISM"
+url: "https://arxiv.org/abs/2603.xxxxx"
+date-released: "2026-03-22"
+keywords:
+  - photonic computing
+  - LLM inference
+  - KV cache
+  - similarity search
+  - microring resonator
+  - thin-film lithium niobate

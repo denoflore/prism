@@ -1,0 +1,44 @@
+{
+  "description": "Recall@32 vs thermal drift sigma (normalized weight noise)",
+  "parameters": {
+    "d": 64,
+    "N_blocks": 1024,
+    "K": 32,
+    "n_trials": 100,
+    "note": "sigma in normalized weight space [-1,1]; FSR=30nm; balanced PD"
+  },
+  "sigma_values": [
+    0.001,
+    0.005,
+    0.01,
+    0.02,
+    0.05,
+    0.1
+  ],
+  "results": {
+    "0.001": {
+      "mean": 0.9965625,
+      "std": 0.009777804904476259
+    },
+    "0.005": {
+      "mean": 0.980625,
+      "std": 0.019151941807555698
+    },
+    "0.01": {
+      "mean": 0.95875,
+      "std": 0.026100766272276376
+    },
+    "0.02": {
+      "mean": 0.9228125,
+      "std": 0.033205974142464185
+    },
+    "0.05": {
+      "mean": 0.810625,
+      "std": 0.054453965649895505
+    },
+    "0.1": {
+      "mean": 0.655625,
+      "std": 0.06171064028998565
+    }
+  }
+}

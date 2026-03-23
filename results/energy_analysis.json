@@ -1,0 +1,85 @@
+{
+  "description": "PRISM energy analysis per query — matches paper Table tab:prism_energy",
+  "parameters": {
+    "d": 64,
+    "N_blocks": 1024,
+    "K": 32,
+    "latency_ns": 9
+  },
+  "components": {
+    "Laser (CW)": {
+      "power_mW": 100.0,
+      "type": "dynamic",
+      "note": "100 mW CW laser source; included in dynamic subtotal per paper Table"
+    },
+    "TEC (thermal stab.)": {
+      "power_mW": 1000.0,
+      "type": "static",
+      "note": "1W TEC is fixed overhead, amortized at throughput T: adds 1/T J per query"
+    },
+    "Voltage driver array": {
+      "power_mW": 5.0,
+      "type": "dynamic",
+      "note": "Fixed per query"
+    },
+    "DAC (d channels)": {
+      "power_mW": 32.0,
+      "type": "dynamic",
+      "scaling": "proportional to d",
+      "note": "64 ch x 0.5 mW"
+    },
+    "MZM modulators": {
+      "power_mW": 6.4,
+      "type": "dynamic",
+      "scaling": "proportional to d",
+      "note": "64 ch x 0.1 mW"
+    },
+    "MRR tuning (TFLN EO)": {
+      "power_mW": 0.0,
+      "type": "static",
+      "note": "TFLN Pockels EO: capacitive, ~5 fJ/ring switching energy"
+    },
+    "Photodetectors (2N balanced)": {
+      "power_mW": 10.0,
+      "type": "dynamic",
+      "scaling": "proportional to N",
+      "note": "2 x 1024 x 0.005 mW (balanced detection)"
+    },
+    "TIAs + ADCs (2N balanced)": {
+      "power_mW": 100.0,
+      "type": "dynamic",
+      "scaling": "proportional to N",
+      "note": "2 x 1024 x 0.049 mW (balanced detection)"
+    },
+    "Top-k logic": {
+      "power_mW": 1.0,
+      "type": "dynamic",
+      "note": "Digital comparator tree"
+    }
+  },
+  "totals": {
+    "dynamic_power_mW": 254.4,
+    "dynamic_energy_per_query_pJ": 2290,
+    "total_power_incl_TEC_mW": 1254.4,
+    "total_energy_incl_TEC_pJ": 11290
+  },
+  "electronic_baselines": {
+    "GPU full scan (A100, 128K)": {
+      "energy_uJ": 50,
+      "note": "Memory BW limited, ~2 TB/s, 7 GB KV"
+    },
+    "GPU ANN (FAISS)": {
+      "energy_uJ": 5,
+      "note": "Approximate nearest neighbor"
+    },
+    "NVIDIA ICMS (estimated)": {
+      "energy_uJ": 10,
+      "note": "In-memory compute"
+    }
+  },
+  "notes": {
+    "TEC": "TEC (~1W) is chip-level thermal stabilization overhead, not included in dynamic subtotal. Amortized at 10^5 QPS: ~10 uJ per query.",
+    "platform": "TFLN Pockels EO — capacitive tuning, zero static heater power per MRR",
+    "scaling": "Dynamic energy depends on d and N: DAC/MZM scale with d, PD/TIA+ADC scale with N, laser/driver/topk are fixed"
+  }
+}

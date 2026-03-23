@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Jupyter
+.ipynb_checkpoints/
+
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.blg
+*.out
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+*Notes.bib
+texput.log
+bu*.aux
+bu*.bbl
+bu*.blg
+
+# Debug screenshots
+inspect_p*.png
+check_p*.png
+size_check*.png
+
+# Large binary
+*.npy
+*.npz
+*.h5
+*.fsp
+
+# OS
+.DS_Store
+Thumbs.db
+paper/
+arxiv_submission.tar.gz
+assets/*.log
+assets/*.aux

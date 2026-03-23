@@ -1,0 +1,31 @@
+{
+  "description": "Combined impairment: 6-bit quantization + thermal drift + detector noise",
+  "parameters": {
+    "d": 64,
+    "N_blocks": 1024,
+    "K": 32,
+    "n_trials": 100,
+    "bits": 6,
+    "sigma_thermal": 0.01,
+    "sigma_detector": 0.01
+  },
+  "combined_recall": {
+    "mean": 0.923125,
+    "std": 0.03601757383555977
+  },
+  "individual_contributions": {
+    "quantization_only": {
+      "mean": 0.9596875,
+      "std": 0.025880962477272753
+    },
+    "thermal_only": {
+      "mean": 0.95875,
+      "std": 0.026100766272276376
+    },
+    "detector_only": {
+      "mean": 0.9509375,
+      "std": 0.027689334025035702
+    }
+  },
+  "note": "Individual contributions at same parameter values for comparison"
+}
