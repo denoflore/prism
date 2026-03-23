@@ -216,9 +216,9 @@ class PRISMSimulator:
         return len(digital_set & prism_set) / self.k
 
     def report(self, gpu_name: str = "H100",
-               hbm_bw_tbps: float = 3.35,
-               hbm_energy_pj_per_byte: float = 31.0,
-               gpu_mac_pj: float = 0.71,
+               hbm_bw_tbps: float = 3.35,    # H100 SXM5 HBM3 spec (nvidia.com/h100)
+               hbm_energy_pj_per_byte: float = 31.0,  # HBM3 ~3.9 pJ/bit = 31 pJ/byte (Micron)
+               gpu_mac_pj: float = 0.71,      # H100 bf16 tensor core (datasheet TDP / peak FLOPS)
                measure_gpu: bool = True) -> dict:
         """
         Print a detailed stage-by-stage comparison: GPU vs PRISM.
@@ -291,28 +291,32 @@ class PRISMSimulator:
                 times.append((time.perf_counter() - t0) * 1e6)
             gpu_measured_us = sorted(times)[len(times) // 2]
 
-        # ── PRISM photonic estimates (from device physics) ──
+        # ── PRISM photonic estimates ──
+        # Latency from device physics: TFLN MRR (Q=10K, R=20um)
+        # See arXiv:2603.12934 for single-ring FDTD validation
         prism = {
-            'dac_ns': 1.0,          # DAC conversion
-            'mzm_ns': 0.1,          # MZM modulation
-            'propagation_ns': 0.5,  # optical propagation (~5cm)
-            'mrr_ns': 0.1,          # MRR ring-down
-            'pd_ns': 0.2,           # photodetection
-            'tia_adc_ns': 2.0,      # TIA + ADC
-            'topk_ns': 5.0,         # CMOS top-k logic
+            'dac_ns': 1.0,          # 10-bit DAC at 1 GS/s (commercial, e.g. AD9176)
+            'mzm_ns': 0.1,          # MZM EO bandwidth >10 GHz (TFLN, Hu et al. 2025)
+            'propagation_ns': 0.5,  # ~5 cm waveguide at n_g=2.30
+            'mrr_ns': 0.1,          # ring-down time = Q/(pi*f_res) ~ 0.01 ns, rounded up
+            'pd_ns': 0.2,           # InGaAs PD bandwidth >10 GHz (commercial)
+            'tia_adc_ns': 2.0,      # TIA + 6-bit ADC at 500 MS/s
+            'topk_ns': 5.0,         # CMOS comparator tree, N=1024, ~5 ns at 28nm
         }
         prism_total_ns = sum(prism.values())
 
-        # PRISM energy (from paper Table III)
+        # PRISM energy per query (d=64, N=1024 design point)
+        # Derived from component power x 9 ns optical transit
+        # See paper Table 4 and energy_analysis.json
         prism_energy = {
-            'laser_pj': 900,
-            'dac_pj': 288,
-            'mzm_pj': 58,
-            'voltage_driver_pj': 45,
-            'eo_bias_pj': 0,  # capacitive, ~0
-            'pd_pj': 90,
-            'tia_adc_pj': 900,
-            'topk_pj': 9,
+            'laser_pj': 900,            # 100 mW CW laser, 9 ns window
+            'dac_pj': 288,              # 64 ch x 0.5 mW/ch x 9 ns
+            'mzm_pj': 58,              # 64 ch x 0.1 mW/ch x 9 ns
+            'voltage_driver_pj': 45,    # 5 mW driver x 9 ns
+            'eo_bias_pj': 0,            # TFLN Pockels: capacitive, ~0 static power
+            'pd_pj': 90,               # 2x1024 balanced PDs x 0.005 mW/PD x 9 ns
+            'tia_adc_pj': 900,          # 2x1024 ch x 0.049 mW/ch x 9 ns
+            'topk_pj': 9,              # 1 mW CMOS logic x 9 ns
         }
         prism_total_pj = sum(prism_energy.values())
 

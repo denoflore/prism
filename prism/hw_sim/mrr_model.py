@@ -52,14 +52,14 @@ class MRRModel:
         Gamma_EO: Electro-optic overlap integral (0 to 1).
         radius_um: Ring radius in micrometers.
     """
-    Q_loaded: float = 10_000
-    ER_dB: float = 20.0
-    lambda_res: float = 1550.0      # nm
-    r33: float = 30.9               # pm/V
-    n_eff: float = 2.138
-    n_g: float = 2.30
-    Gamma_EO: float = 0.70
-    radius_um: float = 20.0
+    Q_loaded: float = 10_000      # design value; FDTD measured Q_L=12,500+/-1,800 (slab100/gap100)
+    ER_dB: float = 20.0           # FDTD extinction ratio (mean D_max=0.317 -> ~20 dB)
+    lambda_res: float = 1550.0    # nm, C-band telecom
+    r33: float = 30.9             # pm/V, X-cut LiNbO3 EO coefficient (Hu et al., Nat. Commun. 2025)
+    n_eff: float = 2.138          # Lumerical MODE, TFLN rib WG 600nm x 1.4um
+    n_g: float = 2.30             # FDTD ring FSR -> n_g = lambda^2 / (FSR * 2*pi*R)
+    Gamma_EO: float = 0.70        # EO overlap integral, lateral S-G electrode, d_eff=2.5um
+    radius_um: float = 20.0       # ring radius, circumference=125.7um, FSR=8.29nm
 
     # Derived (computed in __post_init__)
     FWHM: float = field(init=False)
